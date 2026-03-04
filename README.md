@@ -1,7 +1,7 @@
 # 🌍 TerraDyne: Dynamic Landscape System
 ![image](https://img.shields.io/badge/-Unreal%20Engine-313131?style=for-the-badge&logo=unreal-engine&logoColor=blue) ![image](https://img.shields.io/badge/C%2B%2B-00599C?style=for-the-badge&logo=c%2B%2B&logoColor=blue) ![image](https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue) ![image](https://img.shields.io/badge/json-5E5C5C?style=for-the-badge&logo=json&logoColor=white) ![image](https://img.shields.io/badge/MIT-green?style=for-the-badge) ![alt text](https://img.shields.io/github/stars/gregorik/InstantOrganicCaves) ![alt text](https://img.shields.io/badge/Support-Patreon-red) [![YouTube](https://img.shields.io/badge/YouTube-Subscribe-red?style=flat&logo=youtube)](https://www.youtube.com/@agregori) [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/C0C616ULD4)
 
-**TerraDyne** is an experimental, high-performance, native C++ landscape plugin for **Unreal Engine 5.7**. It decouples physics from visuals to allow for infinite real-time runtime modification—digging, raising, and painting—while maintaining cinematic visual fidelity using Virtual Heightfield Mesh (VHFM) displacement. As of early 2026, I opened a new, advanced 0.3+ branch distributed on Fab.
+**TerraDyne** is an experimental, high-performance, native C++ landscape plugin for **Unreal Engine 5.7**. It decouples physics from visuals to allow for infinite real-time runtime modification—digging, raising, and painting—while maintaining cinematic visual fidelity using Virtual Heightfield Mesh (VHFM) displacement. As of early 2026, I opened a new, advanced 0.3+ branch distributed on [Fab](https://www.fab.com/listings/20f72d71-9737-4ac1-bce5-034eca166529).
 
 > **Dependencies:** Geometry Scripting, Virtual Heightfield Mesh
 <br>
@@ -10,7 +10,7 @@
 
 <br>
 
-![TerraDyne Banner (WIP)](https://via.placeholder.com/1000x200?text=TerraDyne+Dynamic+Terrain+System)
+![TerraDyne Banner](Content/terrrrrrra.png)
 
 | <i><b>Comparison | <i><b>GitHub version (0.1+ MIT)           | <i>[FAB edition (0.3+ Closed)](https://www.fab.com/listings/20f72d71-9737-4ac1-bce5-034eca166529)</b></i>                |
 |:---|:---|:---|
