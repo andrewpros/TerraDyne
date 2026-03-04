@@ -11,7 +11,7 @@
 <br>
 
 <p align="center">
-<img src="Content/terrrrrrra.png" alt="Sonant Logo" width="500"/>
+<img src="Content/terrrrrrra.png" alt="Logo" width="500"/>
 </p>
 
 | <i><b>Comparison | <i><b>GitHub version (0.1+ MIT)           | <i>[FAB edition (0.3+ Closed)](https://www.fab.com/listings/20f72d71-9737-4ac1-bce5-034eca166529)</b></i>                |
