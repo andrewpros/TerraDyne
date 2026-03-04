@@ -8,6 +8,35 @@
 
 ![TerraDyne Banner (WIP)](https://via.placeholder.com/1000x200?text=TerraDyne+Dynamic+Terrain+System)
 
+| <i><b>Comparison | <i><b>GitHub version (0.1+ MIT)           | <i>[FAB edition (0.3+ Closed)](https://www.fab.com/listings/20f72d71-9737-4ac1-bce5-034eca166529)</b></i>                |
+|:---|:---|:---|
+| **Version** | Core | Fully featured + updated |
+| **Distribution** | Source only | Binaries, vetted by Epic |
+| **Engine support** | UE 5.7.0 | UE 5.6 - 5.7.3+ |
+| **Chunk-based / Layered height system** | Included | Included |
+| **Dynamic Mesh Generation** | Included | Included |
+| **Material System** | Included | Included |
+| **Runtime Sculpting Tools** | Included | Included |
+| **Brush Parameters** | Included | Included | 
+| **Native Slate editor panel** | Included | Included |
+| **Real-time Preview** | n/a | Included |
+| **GPU Acceleration (experimental)** | n/a | Included |
+| **4 Weight Layers (RGBA)** | n/a | Included | 
+| **Live GPU Upload** | n/a | Included |
+| **Material Integration** | n/a | Included |
+| **Weight data serialization** | n/a | Included |
+| **HISM-Based vegetation rendering** | n/a | Included |
+| **Grass Profile Data Asset** | n/a | Included |
+| **Background Generation (Async task)** | n/a | Included |
+| **Smart Regeneration: Debounced rebuild** | n/a | Included |
+| **Persistence (Save/Load system)** | n/a | Included |
+| **Undo/Redo System** | n/a | Included |
+| **Multiplayer Support** | n/a | Included |
+| **Updates** | n/a | Regular, vetted by Epic |
+| **Quality Assurance** | GitHub Issues | Vetted by Epic, tested by author |
+| **Support** | GitHub Issues | Forum & Email |
+<br><br>
+
 ## ✨ Key Features
 
 *   **Runtime Voxel-Like Editing:** Deform terrain in real-time using high-performance CPU-side arrays synced to GPU textures. Dig craters, build mounds, or tunnel (via masking).
