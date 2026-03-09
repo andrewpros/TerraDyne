@@ -6,7 +6,8 @@
 > **Dependencies:** Geometry Scripting, Virtual Heightfield Mesh
 <br>
 
-[Watch an early video here.](https://www.youtube.com/watch?v=T4J53XLgaDI)
+[Watch an early video here](https://www.youtube.com/watch?v=T4J53XLgaDI) <br>
+[v0.2 Test Runs](https://www.youtube.com/watch?v=PUAqkkOKjXw)
 
 <br>
 
