@@ -1,10 +1,11 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 
 // Custom Log Category for Editor/Baking operations
-TE_EDITOR_API DECLARE_LOG_CATEGORY_EXTERN(LogTerraDyneEditor, Log, All);
+TERRADYNEEDITOR_API DECLARE_LOG_CATEGORY_EXTERN(LogTerraDyneEditor, Log, All);
 
 class FTerraDyneEditorModule : public IModuleInterface
 {

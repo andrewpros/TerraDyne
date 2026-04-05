@@ -1,8 +1,10 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Engine/StaticMesh.h"
+#include "Materials/MaterialInterface.h"
 #include "TerraDyneGrassTypes.generated.h"
 
 USTRUCT(BlueprintType)
@@ -23,6 +25,10 @@ struct TERRADYNE_API FTerraDyneGrassVariety
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals")
 	TObjectPtr<UStaticMesh> GrassMesh;
+
+	/** Optional material override. If set, replaces the mesh's default material on the grass HISM. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Visuals")
+	TObjectPtr<UMaterialInterface> MaterialOverride;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Placement", meta = (ClampMin = "0.1", ClampMax = "1000.0"))
 	float Density;

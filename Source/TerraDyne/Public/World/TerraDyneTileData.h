@@ -1,8 +1,57 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "Engine/NetSerialization.h"
 #include "TerraDyneTileData.generated.h"
+
+UENUM(BlueprintType)
+enum class ETerraDyneLayer : uint8
+{
+	Base    UMETA(DisplayName = "Base"),
+	Sculpt  UMETA(DisplayName = "Sculpt"),
+	Detail  UMETA(DisplayName = "Detail"),
+	Active  UMETA(DisplayName = "Active Selection")
+};
+
+UENUM(BlueprintType)
+enum class ETerraDyneBrushMode : uint8
+{
+	Raise   UMETA(DisplayName = "Raise"),
+	Lower   UMETA(DisplayName = "Lower"),
+	Flatten UMETA(DisplayName = "Flatten"),
+	Smooth  UMETA(DisplayName = "Smooth"),
+	Paint   UMETA(DisplayName = "Paint")
+};
+
+/** Parameters for a single brush application, sent over the network. */
+USTRUCT(BlueprintType)
+struct FTerraDyneBrushParams
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector_NetQuantize WorldLocation = FVector::ZeroVector;
+
+	UPROPERTY()
+	float Radius = 2000.f;
+
+	UPROPERTY()
+	float Strength = 1.f;
+
+	UPROPERTY()
+	ETerraDyneBrushMode BrushMode = ETerraDyneBrushMode::Raise;
+
+	UPROPERTY()
+	int32 WeightLayerIndex = 0;
+
+	UPROPERTY()
+	float FlattenHeight = 0.f;
+
+	UPROPERTY()
+	bool bIsStrokeStart = false;
+};
 
 /**
  * UTerraDyneTileData

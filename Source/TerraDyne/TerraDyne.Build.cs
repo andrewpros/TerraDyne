@@ -1,3 +1,4 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 using UnrealBuildTool;
 
 public class TerraDyne : ModuleRules
@@ -5,28 +6,44 @@ public class TerraDyne : ModuleRules
 	public TerraDyne(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
+		bUseUnity = false;
+
 
 		// Core dependencies
-		PublicDependencyModuleNames.AddRange(new string[] { 
-			"Core", 
-			"CoreUObject", 
-			"Engine", 
+		PublicDependencyModuleNames.AddRange(new string[] {
+			"Core",
+			"CoreUObject",
+			"Engine",
 			"InputCore",
 			"Landscape",
 			"RenderCore",
 			"RHI",
-			"GeometryCore"
+			"GeometryCore",
+			"UMG",
+			"VirtualHeightfieldMesh"
 		});
 
 		// Plugin dependencies (Must be enabled in .uproject)
 		PublicDependencyModuleNames.AddRange(new string[] {
-			"GeometryFramework",
-			"VirtualHeightfieldMesh"
+			"GeometryFramework"
 		});
 
 		// Private dependencies
 		PrivateDependencyModuleNames.AddRange(new string[] {
-			"GeometryScriptingCore"
+			"GeometryScriptingCore",
+			"Slate",
+            "SlateCore",
+            "DeveloperSettings",
+            "ApplicationCore",
+            "NavigationSystem",
+            "MeshDescription",
+            "StaticMeshDescription"
 		});
+
+		if (Target.bBuildEditor)
+		{
+			PrivateDependencyModuleNames.Add("UnrealEd");
+			PrivateDependencyModuleNames.Add("Foliage");
+		}
 	}
 }

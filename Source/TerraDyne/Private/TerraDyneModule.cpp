@@ -1,7 +1,7 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #include "TerraDyneModule.h"
 #include "Modules/ModuleManager.h"
 #include "ShaderCore.h" // For mapping shader directories if you add custom shaders later
-#include "Interfaces/IPluginManager.h"
 #include "Misc/Paths.h"
 
 // Define the log category

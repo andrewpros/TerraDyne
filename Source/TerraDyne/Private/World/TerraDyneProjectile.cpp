@@ -1,65 +1,130 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #include "World/TerraDyneProjectile.h"
 #include "Core/TerraDyneManager.h"
 #include "Core/TerraDyneSubsystem.h"
+#include "World/TerraDyneChunk.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
 #include "Engine/StaticMesh.h"
-#include "UObject/ConstructorHelpers.h" // Required for FObjectFinder
-#include "DrawDebugHelpers.h" // Required for DrawDebugSphere
+#include "UObject/ConstructorHelpers.h"
+#include "DrawDebugHelpers.h"
+#include "Components/SphereComponent.h"
 
 ATerraDyneProjectile::ATerraDyneProjectile()
 {
-	// 1. Setup Collision (The Ball)
+	PrimaryActorTick.bCanEverTick = true;
+	
+	// Create sphere collision as root
+	CollisionComp = CreateDefaultSubobject<USphereComponent>(TEXT("CollisionComp"));
+	CollisionComp->InitSphereRadius(50.0f);
+	CollisionComp->SetCollisionProfileName(TEXT("PhysicsActor"));
+	CollisionComp->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	CollisionComp->SetCollisionObjectType(ECC_PhysicsBody);
+	CollisionComp->SetCollisionResponseToAllChannels(ECR_Block);
+	CollisionComp->SetCollisionResponseToChannel(ECC_PhysicsBody, ECR_Ignore);
+	CollisionComp->OnComponentHit.AddDynamic(this, &ATerraDyneProjectile::OnHit);
+	SetRootComponent(CollisionComp);
+
+	// Create mesh
 	MeshComp = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MeshComp"));
-	SetRootComponent(MeshComp);
-
-	// Load Engine Basic Sphere
 	static ConstructorHelpers::FObjectFinder<UStaticMesh> SphereObj(TEXT("/Engine/BasicShapes/Sphere"));
-	if (SphereObj.Succeeded()) MeshComp->SetStaticMesh(SphereObj.Object);
+	if (SphereObj.Succeeded()) 
+	{
+		MeshComp->SetStaticMesh(SphereObj.Object);
+	}
+	MeshComp->SetupAttachment(CollisionComp);
+	MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	MeshComp->SetSimulatePhysics(true);
-	MeshComp->SetNotifyRigidBodyCollision(true);
-	MeshComp->SetCollisionProfileName(TEXT("PhysicsActor"));
-
-	// CRITICAL FIX: Bind the Hit Event! 
-	// Without this, OnHit never fires and the holes won't appear.
-	MeshComp->OnComponentHit.AddDynamic(this, &ATerraDyneProjectile::OnHit);
-
-	MeshComp->SetWorldScale3D(FVector(2.0f));
-
-	// 2. Setup Movement
+	// Projectile movement
 	MovementComp = CreateDefaultSubobject<UProjectileMovementComponent>(TEXT("MoveComp"));
-	MovementComp->InitialSpeed = 3000.f;
-	MovementComp->MaxSpeed = 5000.f;
-	MovementComp->bShouldBounce = true;
-	MovementComp->Bounciness = 0.3f;
+	MovementComp->UpdatedComponent = CollisionComp;
+	MovementComp->InitialSpeed = 5000.f;
+	MovementComp->MaxSpeed = 8000.f;
+	MovementComp->bRotationFollowsVelocity = true;
+	MovementComp->bShouldBounce = false;
+	MovementComp->ProjectileGravityScale = 1.0f;
+
+	// Defaults
+	CraterRadius = 800.0f;
+	CraterDepth = -1000.0f;
+	bHasImpacted = false;
 }
 
-void ATerraDyneProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit)
+void ATerraDyneProjectile::BeginPlay()
 {
-	// Only interact with the world on heavy impacts
-	if (NormalImpulse.Size() < 500.0f) return;
+	Super::BeginPlay();
+	
+	SetActorScale3D(FVector(2.0f));
+	
+	UE_LOG(LogTemp, Verbose, TEXT("Meteor spawned at %s"), *GetActorLocation().ToString());
+}
 
-	if (UWorld* World = GetWorld())
+void ATerraDyneProjectile::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+	
+	// Cleanup if falls below world
+	if (GetActorLocation().Z < -10000.0f)
 	{
-		if (UTerraDyneSubsystem* Subsystem = World->GetSubsystem<UTerraDyneSubsystem>())
+		Destroy();
+	}
+}
+
+void ATerraDyneProjectile::OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, 
+	FVector NormalImpulse, const FHitResult& Hit)
+{
+	if (bHasImpacted) return;
+	bHasImpacted = true;
+
+	UE_LOG(LogTemp, Log, TEXT("Meteor IMPACT at %s on %s"), *Hit.Location.ToString(), 
+		OtherActor ? *OtherActor->GetName() : TEXT("NULL"));
+
+	// Visual debug - Reduced clutter
+	// DrawDebugSphere(GetWorld(), Hit.Location, CraterRadius, 32, FColor::Orange, false, 3.0f, 0, 10.0f);
+	
+	// Apply terrain deformation
+	ApplyTerrainDeformation(Hit.Location);
+
+	// Destroy self
+	Destroy();
+}
+
+void ATerraDyneProjectile::ApplyTerrainDeformation(const FVector& ImpactLocation)
+{
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	// Get manager through subsystem
+	ATerraDyneManager* Manager = nullptr;
+	if (UTerraDyneSubsystem* Subsystem = World->GetSubsystem<UTerraDyneSubsystem>())
+	{
+		Manager = Subsystem->GetTerrainManager();
+	}
+
+	// Fallback: find in world
+	if (!Manager)
+	{
+		TArray<AActor*> FoundManagers;
+		UGameplayStatics::GetAllActorsOfClass(World, ATerraDyneManager::StaticClass(), FoundManagers);
+		if (FoundManagers.Num() > 0)
 		{
-			if (ATerraDyneManager* Manager = Subsystem->GetTerrainManager())
-			{
-				// 1. Dig the Hole (Physics Change)
-				// Radius, Depth (-400), IsHole (false)
-				Manager->ApplyGlobalBrush(Hit.Location, CraterRadius, CraterDepth, false);
-
-				// 2. Paint the Magma (Visual Change)
-				// Layer 1 corresponds to the Green Channel (Magma)
-				Manager->ApplyGlobalBrush(Hit.Location, CraterRadius * 1.2f, 1.0f, false, 1 /* Layer 1 */);
-
-				// 3. Visual Feedback
-				//DrawDebugSphere(World, Hit.Location, CraterRadius, 16, FColor::Red, false, 2.0f);
-			}
+			Manager = Cast<ATerraDyneManager>(FoundManagers[0]);
 		}
 	}
 
-	// Shrink slightly on impact to eventually disappear so we don't clog physics
-	SetActorScale3D(GetActorScale3D() * 0.9f);
-	if (GetActorScale3D().X < 0.2f) Destroy();
+	if (Manager)
+	{
+		// Apply crater (negative strength = dig) to the SCULPT layer
+		float Strength = CraterDepth;
+		Manager->ApplyGlobalBrush(ImpactLocation, CraterRadius, Strength, ETerraDyneBrushMode::Lower);
+
+		// Apply scorch mark (paint layer 1)
+		Manager->ApplyGlobalBrush(ImpactLocation, CraterRadius * 1.2f, 1.0f, ETerraDyneBrushMode::Paint, 1);
+		
+		UE_LOG(LogTemp, Log, TEXT("Crater applied to Sculpt layer: Radius=%.0f, Depth=%.0f"), CraterRadius, CraterDepth);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("No TerraDyneManager found!"));
+	}
 }

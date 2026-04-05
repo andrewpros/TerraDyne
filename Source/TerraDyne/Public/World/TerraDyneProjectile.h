@@ -1,3 +1,4 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #pragma once
 
 #include "CoreMinimal.h"
@@ -13,19 +14,35 @@ class TERRADYNE_API ATerraDyneProjectile : public AActor
 	
 public:	
 	ATerraDyneProjectile();
+	
+	virtual void Tick(float DeltaTime) override;
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
+	TObjectPtr<USphereComponent> CollisionComp;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UStaticMeshComponent> MeshComp;
 
-	UPROPERTY(VisibleAnywhere)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	TObjectPtr<UProjectileMovementComponent> MovementComp;
 
-	UPROPERTY(EditAnywhere, Category = "Impact")
-	float CraterRadius = 600.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
+	float CraterRadius;
 
-	UPROPERTY(EditAnywhere, Category = "Impact")
-	float CraterDepth = -400.0f; // Negative = Dig
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Impact")
+	float CraterDepth;
+
+protected:
+	virtual void BeginPlay() override;
 
 	UFUNCTION()
-	void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, FVector NormalImpulse, const FHitResult& Hit);
+	void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, 
+		FVector NormalImpulse, const FHitResult& Hit);
+
+private:
+	bool bHasImpacted;
+	float ImpactDelay;
+
+	void ApplyTerrainDeformation(const FVector& ImpactLocation);
+	void DestroyProjectile();
 };

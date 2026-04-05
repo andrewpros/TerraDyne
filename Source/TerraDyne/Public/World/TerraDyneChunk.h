@@ -1,139 +1,194 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #pragma once
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/DynamicMeshComponent.h"
-#include "VirtualHeightfieldMeshComponent.h"
+#include "DynamicMesh/DynamicMesh3.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "World/TerraDyneTileData.h"
-#include "Engine/TextureRenderTarget2D.h" // Critical for ETextureRenderTargetFormat
+#include "Components/HierarchicalInstancedStaticMeshComponent.h"
+#include "Grass/TerraDyneGrassTypes.h"
 #include "TerraDyneChunk.generated.h"
 
-// Forward Declarations
-class UMaterialInstanceDynamic;
-
-/**
- * ATerraDyneChunk
- *
- * Represents a single streamable tile of the landscape.
- * Updates: Includes public material slots for tools to avoid hardcoded path failures.
- */
-UCLASS(Config = Game)
+UCLASS()
 class TERRADYNE_API ATerraDyneChunk : public AActor
 {
 	GENERATED_BODY()
 
 public:
 	ATerraDyneChunk();
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
-	friend class ATerraDyneManager; // Allow Manager to write directly to HeightCache during Import
+	UPROPERTY(VisibleAnywhere, Category = "TerraDyne")
+	TObjectPtr<UDynamicMeshComponent> DynamicMeshComp;
 
-	//--- Components ---//
+	UPROPERTY(EditAnywhere, Replicated, Category = "TerraDyne")
+	float ZScale;
 
-	// The geometric base. Handles collision and holes.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TerraDyne|Components")
-	TObjectPtr<UDynamicMeshComponent> PhysicsMesh;
+	UPROPERTY(EditAnywhere, Replicated, Category = "TerraDyne")
+	float WorldSize;
 
-	// The visual representation. Uses huge displacement map for details.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TerraDyne|Components")
-	TObjectPtr<UVirtualHeightfieldMeshComponent> VisualMesh;
+	UPROPERTY(EditAnywhere, Replicated, Category = "TerraDyne")
+	int32 Resolution;
 
-	//--- Resources (Transient Runtime) ---//
+	UPROPERTY(VisibleAnywhere, Replicated, Category = "TerraDyne")
+	FIntPoint GridCoordinate;
 
-	// The active Heightmap on the GPU. Driven by HeightCache.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "TerraDyne|Runtime")
-	TObjectPtr<UTextureRenderTarget2D> HeightRT;
+	UPROPERTY(VisibleAnywhere, Replicated, Category = "TerraDyne")
+	float ChunkSizeWorldUnits;
 
-	// The active Weightmap (Layers) on the GPU.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Transient, Category = "TerraDyne|Runtime")
-	TObjectPtr<UTextureRenderTarget2D> WeightRT;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category = "TerraDyne|Procedural")
+	int32 ProceduralSeed = 0;
 
-	//--- Tool Injection (Critical Fixes) ---//
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category = "TerraDyne|Procedural")
+	bool bIsAuthoredChunk = false;
 
-	// Injected by Manager to ensure we can draw heights without LoadObject() failures
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Replicated, Category = "TerraDyne|Procedural")
+	FName PrimaryBiomeTag = NAME_None;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> BrushMaterialBase;
 
-	// Injected by Manager to ensure we can draw layers
 	UPROPERTY(Transient)
-	TObjectPtr<UMaterialInterface> PaintMaterialBase;
+	TObjectPtr<UTextureRenderTarget2D> BaseLayerRT;
 
-	//--- Data & Config ---//
+	UPROPERTY(Transient)
+	TObjectPtr<UTextureRenderTarget2D> SculptLayerRT;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TerraDyne|Identity")
-	FIntPoint GridCoordinate;
+	UPROPERTY(Transient)
+	TObjectPtr<UTextureRenderTarget2D> DetailLayerRT;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "TerraDyne|Identity")
-	float ChunkSizeWorldUnits;
+	UPROPERTY(Transient)
+	TObjectPtr<UTextureRenderTarget2D> HeightRT; // Current height RT (read target for display/collision)
 
-	// Phase 4: The baked static data source. 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "TerraDyne|Identity")
-	TObjectPtr<UTerraDyneTileData> LinkedTileData;
+	UPROPERTY(Transient)
+	TObjectPtr<UTextureRenderTarget2D> HeightRT_Swap; // Ping-pong write target for GPU brush
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TerraDyne|Config")
-	float ZScale = 100.0f;
+	// --- Height Buffers ---
+	TArray<float> BaseBuffer;
+	TArray<float> SculptBuffer;
+	TArray<float> DetailBuffer;
+	TArray<float> HeightBuffer;
 
-	UPROPERTY(EditAnywhere, Category = "TerraDyne|Performance")
-	float CollisionUpdateDelay = 0.1f;
+	// --- Weight Buffers (paint layers 0-3) ---
+	static constexpr int32 NumWeightLayers = 4;
+	TArray<float> WeightBuffers[NumWeightLayers];
 
-	//--- Public API ---//
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> WeightTexture;
 
-	/** Initializes the chunk from raw parameters. */
-	UFUNCTION(BlueprintCallable, Category = "TerraDyne|Init")
-	void InitializeChunk(FIntPoint Coord, float Size, int32 Resolution, UTexture2D* SourceHeight, UTexture2D* SourceWeight = nullptr);
+	// --- Grass ---
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>> GrassISMs;
 
-	/** Initializes from baked asset. */
-	UFUNCTION(BlueprintCallable, Category = "TerraDyne|Init")
-	void InitializeFromAsset(UTerraDyneTileData* TileData);
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UHierarchicalInstancedStaticMeshComponent>> TransferredFoliageISMs;
 
-	/**
-	 * Forces regeneration of the low-poly physics grid.
-	 * Critical for "Sandbox Mode" to ensure the orbs have something to hit.
-	 */
-	UFUNCTION(BlueprintCallable, Category = "TerraDyne|Physics")
-	void RebuildPhysicsMesh();
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<AActor>> TransferredActorFoliageActors;
 
-	/** Modifies the terrain geometry (Dig/Raise). */
-	UFUNCTION(BlueprintCallable, Category = "TerraDyne|Edit")
-	void ApplyLocalIdempotentEdit(FVector RelativePos, float Radius, float Strength, bool bIsHole, int32 PaintLayer = -1);
+	UPROPERTY(EditAnywhere, Category = "TerraDyne|Grass")
+	TObjectPtr<UTerraDyneGrassProfile> GrassProfile;
 
-	/** Paints material layers. */
-	UFUNCTION(BlueprintCallable, Category = "TerraDyne|Edit")
-	void ApplyPaintBrush(FVector WorldPos, float Radius, float Strength, int32 LayerChannel);
-
-	/** Material helper function. */
-	UFUNCTION(BlueprintCallable, Category = "TerraDyne|Visuals")
+public:
+	void Initialize(int32 InResolution, float InSize);
+	void InitializeChunk(FIntPoint Coord, float Size, int32 InRes, UTexture2D* SourceHeight, UTexture2D* SourceWeight = nullptr);
 	void SetMaterial(UMaterialInterface* InMaterial);
 
-	/** Async Saving. */
-	UFUNCTION(BlueprintCallable, Category = "TerraDyne|IO")
-	void SaveAsync(FString SlotName);
+	// BrushMode replaces bIsHole; WeightLayerIndex and FlattenHeight are mode-specific
+	void ApplyLocalIdempotentEdit(
+		FVector RelativePos,
+		float Radius,
+		float Strength,
+		ETerraDyneBrushMode BrushMode,
+		int32 WeightLayerIndex = 0,
+		float FlattenHeight = 0.f);
+
+	void RebuildPhysicsMesh();
+	float GetHeightAtLocation(FVector LocalPos) const;
+	bool IsUsingGPU() const { return bUseGPU; }
+	FBox GetWorldBounds() const;
+
+	// Weight texture upload
+	void UploadWeightTexture();
+
+	// Grass
+	void SetGrassProfile(UTerraDyneGrassProfile* Profile);
+	void RequestGrassRegen();
+	void ApplyGrassResult(int32 VarietyIndex, TArray<FTransform>&& Transforms);
+
+	// Imported placed foliage
+	void SetTransferredFoliageData(
+		const TArray<FString>& InStaticMeshPaths,
+		const TArray<int32>& InMaterialCounts,
+		const TArray<FString>& InOverrideMaterialPaths,
+		const TArray<int32>& InDefinitionIndices,
+		const TArray<FTransform>& InLocalTransforms,
+		const TArray<float>& InTerrainOffsets,
+		bool bInFollowsTerrain);
+	void RefreshTransferredFoliagePlacement(bool bSnapToTerrain);
+	void RequestTransferredFoliageRefresh();
+	void SetTransferredFoliageFollowsTerrain(bool bInFollowsTerrain);
+	int32 GetTransferredFoliageInstanceCount() const { return TransferredFoliageInstanceLocalTransforms.Num(); }
+	int32 GetTransferredFoliageDefinitionCount() const { return TransferredFoliageStaticMeshPaths.Num(); }
+	void SetTransferredActorFoliageData(
+		const TArray<FString>& InActorClassPaths,
+		const TArray<uint8>& InAttachFlags,
+		const TArray<int32>& InDefinitionIndices,
+		const TArray<FTransform>& InLocalTransforms,
+		const TArray<float>& InTerrainOffsets);
+	void RefreshTransferredActorFoliagePlacement(bool bSnapToTerrain);
+	int32 GetTransferredActorFoliageInstanceCount() const { return TransferredActorFoliageInstanceLocalTransforms.Num(); }
+	int32 GetTransferredActorFoliageDefinitionCount() const { return TransferredActorFoliageClassPaths.Num(); }
+	bool GetTransferredActorFoliageInstanceTransform(int32 InstanceIndex, FTransform& OutTransform) const;
+
+	// Persistence
+	struct FTerraDyneChunkData GetSerializedData();
+	void LoadFromData(const struct FTerraDyneChunkData& Data);
+
+	// LOD & Optimization
+	void UpdateLOD(const FVector& ViewerPos);
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void Tick(float DeltaTime) override;
 
 private:
-	//--- Internal Data ---//
+	bool bInitialized;
+	bool bUseGPU;
+	void UpdateDisplayMaterialParameters();
+	
+	// Collision Throttling
+	float CollisionDebounceTimer;
+	bool bCollisionDirty;
 
-	// CPU-side Single Source of Truth for Height.
-	TArray<float> HeightCache;
-	int32 Resolution;
+	// Grass Debounce
+	float GrassDebounceTimer;
+	bool bGrassDirty;
 
-	// Timer for Anti-Stutter system
-	FTimerHandle TimerHandle_CollisionUpdate;
-	bool bPhysicsIsDirty;
+	// Imported foliage refresh debounce
+	float TransferredFoliageDebounceTimer;
+	bool bTransferredFoliageDirty;
+	bool bTransferredFoliageFollowsTerrain;
+	TArray<FString> TransferredFoliageStaticMeshPaths;
+	TArray<int32> TransferredFoliageMaterialCounts;
+	TArray<FString> TransferredFoliageOverrideMaterialPaths;
+	TArray<int32> TransferredFoliageDefinitionIndices;
+	TArray<FTransform> TransferredFoliageInstanceLocalTransforms;
+	TArray<float> TransferredFoliageInstanceTerrainOffsets;
+	TArray<FString> TransferredActorFoliageClassPaths;
+	TArray<uint8> TransferredActorFoliageAttachFlags;
+	TArray<int32> TransferredActorFoliageDefinitionIndices;
+	TArray<FTransform> TransferredActorFoliageInstanceLocalTransforms;
+	TArray<float> TransferredActorFoliageInstanceTerrainOffsets;
 
-	// Cached Material Instance to drive RT parameters
-	UPROPERTY(Transient)
-	TObjectPtr<UMaterialInstanceDynamic> TerrainMID;
-
-	//--- Private Helpers ---//
-
-	void SyncPhysicsGeometry();
-	void UpdateVisualTexture();
-
-	UFUNCTION()
-	void PerformDeferredCollisionUpdate();
-
-	UTextureRenderTarget2D* CreateInternalRT(int32 Res, ETextureRenderTargetFormat Format, FLinearColor ClearColor);
+	bool SetupGPU();
+	void UpdateRenderTargetFromHeightmap();
+	void ReadbackRenderTarget();
+	void ApplyBrushGPU(FVector LocalPos, float Radius, float Strength);
+	void RebuildMesh();
+	void UpdateCollision();
+	void ClearTransferredFoliageComponents();
+	void ClearTransferredActorFoliageActors();
 };

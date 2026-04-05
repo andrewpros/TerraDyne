@@ -1,13 +1,22 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #include "Baking/TerraDyneBaker.h"
 #include "World/TerraDyneTileData.h"
 
 // Engine Includes
 #include "LandscapeProxy.h"
 #include "LandscapeComponent.h"
+#include "LandscapeInfo.h"
+#include "LandscapeEdit.h"
 #include "Engine/Texture2D.h"
 #include "TextureResource.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "UObject/SavePackage.h"
+
+/**
+ * UE Landscape stores height as 16-bit values with 128 cm/unit vertical scale.
+ * This constant converts component transform scale to the full height range.
+ */
+static constexpr float LandscapeHeightScale = 128.0f;
 
 TArray<UTerraDyneTileData*> UTerraDyneBaker::BakeLandscapeToAssets(ALandscapeProxy* SourceLandscape, FString DestinationPath)
 {
@@ -67,15 +76,15 @@ UTerraDyneTileData* UTerraDyneBaker::BakeComponent(ULandscapeComponent* Componen
     Package->FullyLoad();
 
     // Create the UObject
-    UTerraDyneTileData* NewData = NewObject<UTerraDyneTileData>(Package, *AssetName, RF_Public | RF_Standalone | RF_MarkAsRootSet);
+    UTerraDyneTileData* NewData = NewObject<UTerraDyneTileData>(Package, *AssetName, RF_Public | RF_Standalone);
 
     // 3. Extract Metadata
-    float QuadCount = Component->GetComponentSizeQuads(); // e.g., 63
+    float QuadCount = Component->ComponentSizeQuads; // e.g., 63
     float ScaleX = Component->GetComponentTransform().GetScale3D().X;
     float ScaleZ = Component->GetComponentTransform().GetScale3D().Z;
 
     NewData->RealWorldSize = QuadCount * ScaleX;
-    NewData->BakedZScale = ScaleZ * 128.0f; // *128 is a specific engine constant for max landscape height range usually
+    NewData->BakedZScale = ScaleZ * LandscapeHeightScale;
     // Store grid coordinates for debugging
     NewData->GridCoordinate = FIntPoint(Component->SectionBaseX, Component->SectionBaseY);
     NewData->SourceComponentName = Component->GetName();
@@ -168,35 +177,81 @@ bool UTerraDyneBaker::ExtractHeightmapData(ULandscapeComponent* Comp, TArray<uin
 
 bool UTerraDyneBaker::ExtractWeightmapData(ULandscapeComponent* Comp, TArray<FColor>& OutData, int32& OutRes)
 {
-    // Landscape layers are distributed across multiple textures if >4 layers.
-    // For this baker, we grab index 0 (the primary texture).
-    UTexture2D* WeightTex = Comp->GetWeightmapTexture(0);
-    if (!WeightTex) return false;
-
-    FTexturePlatformData* PlatformData = WeightTex->GetPlatformData();
-    if (!PlatformData || PlatformData->Mips.Num() == 0) return false;
-
-    int32 Width = PlatformData->Mips[0].SizeX;
-    int32 Height = PlatformData->Mips[0].SizeY;
-    OutRes = Width;
-
-    OutData.Reset();
-    OutData.SetNumUninitialized(Width * Height);
-
-    const void* RawData = PlatformData->Mips[0].BulkData.Lock(LOCK_READ_ONLY);
-
-    if (RawData)
+    // Use FLandscapeEditDataInterface — the public editor API for reading landscape weight data.
+    // This avoids private WeightmapTextures access restrictions in UE 5.6.
+    ALandscapeProxy* Proxy = Comp->GetLandscapeProxy();
+    if (!Proxy)
     {
-        // Raw copy of weights
-        const FColor* Pixels = static_cast<const FColor*>(RawData);
-        FMemory::Memcpy(OutData.GetData(), Pixels, OutData.Num() * sizeof(FColor));
-    }
-    else
-    {
-        PlatformData->Mips[0].BulkData.Unlock();
+        UE_LOG(LogTemp, Warning, TEXT("TerraDyneBaker: Component has no LandscapeProxy."));
         return false;
     }
 
-    PlatformData->Mips[0].BulkData.Unlock();
+    ULandscapeInfo* Info = Proxy->GetLandscapeInfo();
+    if (!Info)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("TerraDyneBaker: LandscapeInfo not available. Ensure landscape is registered."));
+        return false;
+    }
+
+    // Collect paint layer infos (up to 4 for RGBA channels)
+    TArray<ULandscapeLayerInfoObject*> LayerInfos;
+    for (const FWeightmapLayerAllocationInfo& Alloc : Comp->GetWeightmapLayerAllocations())
+    {
+        if (Alloc.LayerInfo && !LayerInfos.Contains(Alloc.LayerInfo))
+        {
+            LayerInfos.Add(Alloc.LayerInfo);
+            if (LayerInfos.Num() >= 4) break;
+        }
+    }
+
+    if (LayerInfos.Num() == 0)
+    {
+        UE_LOG(LogTemp, Log, TEXT("TerraDyneBaker: No paint layers found on component — skipping weight extraction."));
+        return false;
+    }
+
+    int32 Quads = Comp->ComponentSizeQuads;
+    int32 Size = Quads + 1; // Vertex count = quads + 1
+    OutRes = Size;
+    OutData.SetNumZeroed(Size * Size);
+
+    // Component bounds in landscape space
+    int32 X1 = Comp->SectionBaseX;
+    int32 Y1 = Comp->SectionBaseY;
+    int32 X2 = X1 + Quads;
+    int32 Y2 = Y1 + Quads;
+
+    FLandscapeEditDataInterface EditData(Info);
+
+    for (int32 LayerIdx = 0; LayerIdx < LayerInfos.Num(); LayerIdx++)
+    {
+        TArray<uint8> WeightData;
+        int32 QX1 = X1, QY1 = Y1, QX2 = X2, QY2 = Y2;
+        EditData.GetWeightDataFast(LayerInfos[LayerIdx], QX1, QY1, QX2, QY2, &WeightData, 0);
+
+        int32 Stride = QX2 - QX1 + 1;
+        for (int32 Y = 0; Y < Size && Y < (QY2 - QY1 + 1); Y++)
+        {
+            for (int32 X = 0; X < Size && X < Stride; X++)
+            {
+                int32 SrcIdx = Y * Stride + X;
+                int32 DstIdx = Y * Size + X;
+                if (!WeightData.IsValidIndex(SrcIdx) || !OutData.IsValidIndex(DstIdx)) continue;
+
+                uint8 Val = WeightData[SrcIdx];
+                switch (LayerIdx)
+                {
+                case 0: OutData[DstIdx].R = Val; break;
+                case 1: OutData[DstIdx].G = Val; break;
+                case 2: OutData[DstIdx].B = Val; break;
+                case 3: OutData[DstIdx].A = Val; break;
+                }
+            }
+        }
+
+        UE_LOG(LogTemp, Log, TEXT("TerraDyneBaker: Extracted weight layer %d (%s) — %d pixels"),
+            LayerIdx, *LayerInfos[LayerIdx]->LayerName.ToString(), WeightData.Num());
+    }
+
     return true;
 }

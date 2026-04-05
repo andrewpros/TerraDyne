@@ -1,3 +1,4 @@
+// Copyright (c) 2026 GregOrigin. All Rights Reserved.
 #include "Physics/TerraDyneCollision.h"
 
 // Engine Includes
@@ -103,28 +104,66 @@ bool UTerraDyneCollisionLib::IsLocationTraceable(UDynamicMeshComponent* MeshComp
 {
 	if (!MeshComp || !MeshComp->GetDynamicMesh()) return false;
 
-	bool bIsHole = false;
+	bool bIsTraceable = true;
 
-	// Access the underlying mesh spatial data structure for a query
 	MeshComp->GetDynamicMesh()->ProcessMesh([&](const UE::Geometry::FDynamicMesh3& Mesh)
 	{
-		// We need a spatial query structure (AABB Tree) to find the triangle at X,Y
-		// Note: Building the AABB tree is expensive. If this is called every tick, 
-		// the tree should be cached in the Chunk class, not built here.
-		// For a static library function, we perform a brute force or simple check if we assume 2D grid.
-		
-		// FASTER METHOD: Mathematical Look up (Validation only)
-		// If we assume the mesh is a perfect grid, we don't need the AABB tree.
-		// However, for generic Dynamic Meshes, using the AABB tree is correct.
-		
-		// NOTE: In a real high-perf scenario, accessing Component->GetDynamicMesh()->GetAABBTree() 
-		// requires the component to have "bEnableSpatialDataStructure = true".
+		if (Mesh.TriangleCount() == 0) return;
+
+		// Determine grid parameters from mesh bounds
+		UE::Geometry::FAxisAlignedBox3d Bounds = Mesh.GetBounds();
+		double WorldSizeX = Bounds.Max.X - Bounds.Min.X;
+		double WorldSizeY = Bounds.Max.Y - Bounds.Min.Y;
+		if (WorldSizeX <= 0.0 || WorldSizeY <= 0.0) return;
+
+		// Top surface vertex count = total / 2 (mesh has top + bottom surfaces)
+		int32 TopVerts = Mesh.VertexCount() / 2;
+		int32 Resolution = FMath::RoundToInt(FMath::Sqrt((double)TopVerts));
+		if (Resolution < 2) return;
+
+		// Convert local position to normalized [0,1] coordinates
+		double NormX = (LocalLocation.X - Bounds.Min.X) / WorldSizeX;
+		double NormY = (LocalLocation.Y - Bounds.Min.Y) / WorldSizeY;
+
+		// Out of bounds
+		if (NormX < 0.0 || NormX > 1.0 || NormY < 0.0 || NormY > 1.0) return;
+
+		// Map to grid cell
+		int32 CellX = FMath::Clamp(FMath::FloorToInt(NormX * (Resolution - 1)), 0, Resolution - 2);
+		int32 CellY = FMath::Clamp(FMath::FloorToInt(NormY * (Resolution - 1)), 0, Resolution - 2);
+
+		// Top surface triangles are appended first in RebuildMesh():
+		// 2 triangles per cell, sequential order: row-major (Y outer, X inner)
+		// Assumes: fresh mesh from RebuildMesh() with sequential triangle IDs.
+		// Total expected top-surface triangles = 2 * (Resolution-1)^2
+		int32 ExpectedTopTris = 2 * (Resolution - 1) * (Resolution - 1);
+		if (Mesh.TriangleCount() < ExpectedTopTris) return; // Mesh layout mismatch — assume traceable
+
+		int32 TriBase = (CellY * (Resolution - 1) + CellX) * 2;
+
+		// Check MaterialID on both triangles in this cell (hole = non-zero MaterialID)
+		const UE::Geometry::FDynamicMeshMaterialAttribute* MatAttrib =
+			Mesh.HasAttributes() ? Mesh.Attributes()->GetMaterialID() : nullptr;
+
+		if (MatAttrib)
+		{
+			for (int32 Offset = 0; Offset < 2; Offset++)
+			{
+				int32 TriID = TriBase + Offset;
+				if (Mesh.IsTriangle(TriID))
+				{
+					int32 MatID = 0;
+					MatAttrib->GetValue(TriID, &MatID);
+					if (MatID != 0)
+					{
+						bIsTraceable = false;
+						return;
+					}
+				}
+			}
+		}
+		// No material attribute layer → no holes possible → traceable
 	});
 
-	// For TerraDyne, the "Hole" logic is strictly Material ID based.
-	// If the physics material at this location has a specific tag or ID, return false.
-	// Since PhysX/Chaos handles this natively via "ComplexAsSimple" and Material Masks,
-	// this function is often redundant unless doing custom logic.
-
-	return !bIsHole;
+	return bIsTraceable;
 }
